@@ -36,8 +36,35 @@ def footer(r):
   </div>
 </footer>'''
 
-def shell(r, title, desc, body, canonical, og_image=None, extra_head=''):
-    og = f'\n<meta property="og:image" content="https://engagedigitallearning.com/images/{og_image}">' if og_image else ''
+SITE = 'https://engagedigitallearning.com'
+SITE_NAME = 'Engage Digital Learning'
+AUTHOR = 'Chaohua Ou'
+BOOK_TITLE = 'Designing Socially Dynamic Digital Learning'
+BOOK_SUBTITLE = 'Technologies and Strategies for Student Engagement'
+BOOK_URL = 'https://www.routledge.com/Designing-Socially-Dynamic-Digital-Learning-Technologies-and-Strategies-for-Student-Engagement/Ou/p/book/9781032436012'
+BOOK_ISBN = '9781032436012'
+
+PERSON_LD = {
+  '@type': 'Person', '@id': f'{SITE}/#author', 'name': AUTHOR, 'url': f'{SITE}/#author',
+  'image': f'{SITE}/images/chaohua-ou.jpg',
+  'jobTitle': 'Director of Data and Learning Technologies',
+  'worksFor': {'@type': 'Organization', 'name': 'Lastinger Center for Learning, University of Florida', 'url': 'https://lastinger.center.ufl.edu/'},
+  'knowsAbout': ['online learning', 'instructional design', 'student engagement', 'educational technology', 'AI in education', 'peer assessment'],
+}
+
+def jsonld(data):
+    import json
+    return '\n<script type="application/ld+json">' + json.dumps({'@context': 'https://schema.org', **data}, ensure_ascii=False, indent=1) + '</script>'
+
+def shell(r, title, desc, body, canonical, og_image=None, extra_head='', og_image_alt=None, published=None, modified=None):
+    is_article = '/blog/' in canonical and canonical.rstrip('/').split('/')[-1] != 'blog'
+    og_image = og_image or 'book-cover.jpg'
+    og = f'\n<meta property="og:image" content="{SITE}/images/{og_image}">'
+    if og_image_alt: og += f'\n<meta property="og:image:alt" content="{og_image_alt}">'
+    if is_article:
+        og += f'\n<meta property="article:published_time" content="{published}">'
+        if modified: og += f'\n<meta property="article:modified_time" content="{modified}">'
+        og += f'\n<meta property="article:author" content="{AUTHOR}">\n<meta property="article:section" content="AI &amp; Education">'
     return f'''<!doctype html>
 <html lang="en">
 <head>
@@ -45,10 +72,19 @@ def shell(r, title, desc, body, canonical, og_image=None, extra_head=''):
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{title}</title>
 <meta name="description" content="{desc}">
+<meta name="author" content="{AUTHOR}">
+<meta name="robots" content="index, follow, max-image-preview:large">
 <link rel="canonical" href="{canonical}">
+<meta property="og:site_name" content="{SITE_NAME}">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="{canonical}">
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{desc}">
-<meta property="og:type" content="{'article' if '/blog/' in canonical and canonical.rstrip('/').split('/')[-1] != 'blog' else 'website'}">{og}
+<meta property="og:type" content="{'article' if is_article else 'website'}">{og}
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{title}">
+<meta name="twitter:description" content="{desc}">
+<meta name="twitter:image" content="{SITE}/images/{og_image}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="{FONTS}">
@@ -300,8 +336,20 @@ def build_post(p, other):
   </div>
 </section>
 </main>'''
-    return shell(r, f"{p['title']} · Engage Digital Learning", p['deck'].replace('"','&quot;'), body,
-                 f"https://engagedigitallearning.com/blog/{p['slug']}/", p['image'])
+    url = f"{SITE}/blog/{p['slug']}/"
+    ld = jsonld({
+      '@type': 'BlogPosting', '@id': url, 'mainEntityOfPage': url, 'url': url,
+      'headline': p['title'], 'alternativeHeadline': p['deck'], 'description': p['summary'],
+      'image': {'@type': 'ImageObject', 'url': f"{SITE}/images/{p['image']}", 'caption': p['image_alt']},
+      'datePublished': p['date'], 'dateModified': p.get('modified', p['date']),
+      'author': PERSON_LD, 'publisher': {'@type': 'Organization', 'name': SITE_NAME, 'url': SITE + '/', 'logo': {'@type': 'ImageObject', 'url': f'{SITE}/images/book-cover.jpg'}},
+      'inLanguage': 'en-US', 'isPartOf': {'@type': 'Blog', '@id': f'{SITE}/blog/#blog', 'name': 'AI & Education'},
+      'keywords': p.get('keywords', ['AI in education', 'online learning', 'student engagement']),
+      'isAccessibleForFree': True,
+    })
+    return shell(r, f"{p['title']} · {SITE_NAME}", p['summary'].replace('"','&quot;'), body,
+                 url, p['image'], extra_head=ld, og_image_alt=p['image_alt'].replace('"','&quot;'),
+                 published=p['date'], modified=p.get('modified'))
 
 def build_blog_index():
     r = '../'
@@ -310,7 +358,7 @@ def build_blog_index():
 <section class="hero post-hero">
   <div class="wrap">
     <p class="eyebrow">AI &amp; Education</p>
-    <h1>Notes from the intersection of AI and teaching.</h1>
+    <h1>Notes from the Intersection of AI and Education</h1>
     <p class="deck">Evolving thoughts and experiences with AI in education: what I'm learning, experimenting with, and questioning along the way, one idea and reflection at a time.</p>
   </div>
 </section>
@@ -322,7 +370,15 @@ def build_blog_index():
   </div>
 </section>
 </main>'''
-    return shell(r, 'AI & Education · Engage Digital Learning', 'Writing by Chaohua Ou on AI, student engagement and digital learning design.', body, 'https://engagedigitallearning.com/blog/')
+    ld = jsonld({
+      '@type': 'Blog', '@id': f'{SITE}/blog/#blog', 'url': f'{SITE}/blog/', 'name': 'AI & Education',
+      'description': 'Writing by Chaohua Ou on AI, student engagement and digital learning design.',
+      'author': PERSON_LD, 'inLanguage': 'en-US',
+      'blogPost': [{'@type': 'BlogPosting', '@id': f"{SITE}/blog/{p['slug']}/", 'url': f"{SITE}/blog/{p['slug']}/", 'headline': p['title'], 'datePublished': p['date'], 'image': f"{SITE}/images/{p['image']}"} for p in POSTS],
+    })
+    return shell(r, f'AI &amp; Education: Notes on AI, Teaching and Learning · {SITE_NAME}',
+                 'Essays by Chaohua Ou on AI in education, peer assessment, project-based learning, student engagement and online course design.',
+                 body, f'{SITE}/blog/', extra_head=ld)
 
 def build_home():
     body = HOME_BODY + '''
@@ -335,7 +391,22 @@ def build_home():
     start = body.index('<div class="posts">'); end = body.index('</div>\n  </div>\n</section>', start)
     cards = '\n'.join(post_card(p, '') for p in POSTS)
     body = body[:start] + '<div class="posts">\n' + cards + '\n    ' + body[end:]
-    return shell('', 'Engage Digital Learning', 'Designing Socially Dynamic Digital Learning by Chaohua Ou: a practical guide to online and blended courses that foster social interaction and student engagement.', body.strip(), 'https://engagedigitallearning.com/', 'book-cover.jpg')
+    ld = jsonld({'@graph': [
+      {'@type': 'WebSite', '@id': f'{SITE}/#website', 'url': SITE + '/', 'name': SITE_NAME,
+       'description': f'{BOOK_TITLE}: {BOOK_SUBTITLE}, by {AUTHOR}', 'publisher': {'@id': f'{SITE}/#author'}, 'inLanguage': 'en-US'},
+      {'@type': 'Book', '@id': f'{SITE}/#book', 'name': BOOK_TITLE, 'alternateName': f'{BOOK_TITLE}: {BOOK_SUBTITLE}',
+       'author': {'@id': f'{SITE}/#author'}, 'isbn': BOOK_ISBN, 'bookFormat': 'https://schema.org/Paperback',
+       'publisher': {'@type': 'Organization', 'name': 'Routledge'}, 'inLanguage': 'en',
+       'image': f'{SITE}/images/book-cover.jpg', 'url': SITE + '/#book', 'sameAs': BOOK_URL,
+       'about': ['online learning', 'blended learning', 'student engagement', 'instructional design', 'social learning', 'educational technology'],
+       'description': 'A practical guide to designing online and blended courses that foster social interaction and student engagement.',
+       'offers': {'@type': 'Offer', 'url': BOOK_URL, 'availability': 'https://schema.org/InStock', 'seller': {'@type': 'Organization', 'name': 'Routledge'}}},
+      PERSON_LD,
+    ]})
+    return shell('', f'{BOOK_TITLE} · {AUTHOR} | {SITE_NAME}',
+                 f'{BOOK_TITLE}: {BOOK_SUBTITLE} by {AUTHOR} (Routledge). A practical guide to designing online and blended courses that foster social interaction and student engagement.',
+                 body.strip(), SITE + '/', 'book-cover.jpg', extra_head=ld,
+                 og_image_alt=f'Cover of {BOOK_TITLE} by {AUTHOR}')
 
 (ROOT / 'index.html').write_text(build_home())
 (ROOT / 'blog' / 'index.html').write_text(build_blog_index())
@@ -364,4 +435,15 @@ tpl = dict(slug='your-post-slug', title='Your post title', deck='One-sentence su
 <div class="cite"><p class="eyebrow">How to cite this post</p><p>Ou, C. (2026, January 1). <em>Your post title</em>. https://engagedigitallearning.com/blog/your-post-slug/</p></div>
 ''')
 (ROOT / 'blog' / 'post-template.html').write_text(build_post(tpl, POSTS[0]))
+# sitemap.xml and robots.txt (regenerated on every build)
+import datetime
+today = datetime.date.today().isoformat()
+latest = max(p.get('modified', p['date']) for p in POSTS)
+urls = [(SITE + '/', today, 'monthly', '1.0'), (SITE + '/blog/', today, 'monthly', '0.8')]
+urls += [(f"{SITE}/blog/{p['slug']}/", p.get('modified', p['date']), 'yearly', '0.7') for p in POSTS]
+sm = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+sm += ''.join(f'  <url><loc>{u}</loc><lastmod>{d}</lastmod><changefreq>{c}</changefreq><priority>{pr}</priority></url>\n' for u,d,c,pr in urls)
+sm += '</urlset>\n'
+(ROOT / 'sitemap.xml').write_text(sm)
+(ROOT / 'robots.txt').write_text(f'User-agent: *\nAllow: /\nDisallow: /blog/post-template.html\n\nSitemap: {SITE}/sitemap.xml\n')
 print('built')
